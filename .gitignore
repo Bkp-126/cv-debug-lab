@@ -1,0 +1,10 @@
+__pycache__/
+.venv/
+.env
+*.db
+runs/
+weights/
+*.pt
+*.pth
+*.onnx
+data/*.db
