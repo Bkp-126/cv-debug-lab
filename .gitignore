@@ -1,10 +1,35 @@
+# Python
 __pycache__/
+*.pyc
+.pytest_cache/
+
+# Virtual environments
 .venv/
+venv/
+env/
+
+# Environment variables
 .env
+.env.*
+
+# Databases
 *.db
+data/*.db
+
+# Model artifacts
 runs/
 weights/
 *.pt
 *.pth
 *.onnx
-data/*.db
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/
