@@ -31,6 +31,27 @@ ISSUE_DESCRIPTIONS = {
     "invalid_bbox_size": "bbox 宽高非法",
     "invalid_label_format": "标签格式非法",
 }
+EXPERIMENT_DISPLAY_COLUMNS = {
+    "experiment_id": "实验 ID",
+    "experiment_name": "实验名称",
+    "dataset_name": "数据集",
+    "model_name": "模型",
+    "checkpoint_path": "权重路径",
+    "imgsz": "输入尺寸",
+    "batch": "单批样本数",
+    "epochs": "训练轮数",
+    "precision": "精确率",
+    "recall": "召回率",
+    "map50": "mAP50",
+    "map50_95": "mAP50-95",
+    "notes": "备注",
+    "created_at": "创建时间",
+}
+METRIC_LABELS = {
+    "precision": "精确率",
+    "recall": "召回率",
+    "map50": "mAP50",
+}
 
 
 def _best_experiment(records: list[dict], metric_name: str) -> dict | None:
@@ -49,9 +70,15 @@ def _show_best_metric(records: list[dict], metric_name: str, label: str) -> None
     if not best:
         st.info(f"暂无可用的 {label} 指标。")
         return
+    title = f"最佳 {label} 实验" if label.startswith("mAP") else f"最佳{label}实验"
+    metric_label = {
+        "precision": "precision",
+        "recall": "recall",
+        "map50": "mAP50",
+    }.get(metric_name, metric_name)
     st.write(
-        f"{label} 最高：`{best['experiment_name']}` "
-        f"({metric_name}={float(best[metric_name]):.4f})"
+        f"{title}：`{best['experiment_name']}`，"
+        f"{metric_label}={float(best[metric_name]):.4f}"
     )
 
 
@@ -205,8 +232,16 @@ def main() -> None:
             parsed_metrics = parse_yolo_results_csv(uploaded_file)
             st.session_state["parsed_metrics"] = parsed_metrics
             st.success("results.csv 解析成功。")
+            parsed_df = pd.DataFrame([parsed_metrics]).rename(
+                columns={
+                    "precision": "精确率",
+                    "recall": "召回率",
+                    "map50": "mAP50",
+                    "map50_95": "mAP50-95",
+                }
+            )
             st.dataframe(
-                pd.DataFrame([parsed_metrics]),
+                parsed_df,
                 use_container_width=True,
             )
         except ValueError as exc:
@@ -223,12 +258,12 @@ def main() -> None:
                 "权重路径",
                 value="example_weights/yolo11n_demo_best.pt",
             )
-            imgsz = st.number_input("imgsz", min_value=1, value=640, step=32)
-            batch = st.number_input("batch", min_value=1, value=16, step=1)
+            imgsz = st.number_input("输入尺寸 `imgsz`", min_value=1, value=640, step=32)
+            batch = st.number_input("`batch size`", min_value=1, value=16, step=1)
         with right_column:
-            epochs = st.number_input("epochs", min_value=1, value=50, step=1)
+            epochs = st.number_input("训练轮数 `epochs`", min_value=1, value=50, step=1)
             precision = st.number_input(
-                "precision",
+                "精确率 `precision`",
                 min_value=0.0,
                 max_value=1.0,
                 value=float(parsed_metrics.get("precision", 0.0)),
@@ -236,7 +271,7 @@ def main() -> None:
                 format="%.4f",
             )
             recall = st.number_input(
-                "recall",
+                "召回率 `recall`",
                 min_value=0.0,
                 max_value=1.0,
                 value=float(parsed_metrics.get("recall", 0.0)),
@@ -291,6 +326,7 @@ def main() -> None:
         "experiment_name",
         "dataset_name",
         "model_name",
+        "checkpoint_path",
         "imgsz",
         "batch",
         "epochs",
@@ -298,21 +334,26 @@ def main() -> None:
         "recall",
         "map50",
         "map50_95",
+        "notes",
         "created_at",
     ]
-    st.dataframe(
+    experiment_df = (
         pd.DataFrame(experiment_records)[display_columns]
         if experiment_records
-        else pd.DataFrame(columns=display_columns),
+        else pd.DataFrame(columns=display_columns)
+    )
+    experiment_df = experiment_df.rename(columns=EXPERIMENT_DISPLAY_COLUMNS)
+    st.dataframe(
+        experiment_df,
         use_container_width=True,
     )
 
     st.subheader("简单实验结论")
     if len(experiment_records) < 2:
-        st.info("实验数量不足，至少需要两组实验才能做有效对比。")
+        st.info("当前实验数量较少，建议继续补充实验记录后再进行趋势判断。")
     else:
-        _show_best_metric(experiment_records, "recall", "recall")
-        _show_best_metric(experiment_records, "precision", "precision")
+        _show_best_metric(experiment_records, "recall", "召回率")
+        _show_best_metric(experiment_records, "precision", "精确率")
         _show_best_metric(experiment_records, "map50", "mAP50")
 
     if st.button("生成实验追踪报告"):

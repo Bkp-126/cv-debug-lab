@@ -188,20 +188,26 @@ def _best_record(
     return max(valid_records, key=lambda record: float(record.get(metric_name, 0)))
 
 
-def _experiment_summary_line(
+def _experiment_summary_lines(
     record: dict[str, Any] | None,
     metric_name: str,
-) -> str:
-    """Build a Chinese summary line for the best experiment."""
+) -> list[str]:
+    """Build Chinese summary lines for the best experiment."""
     if not record:
-        return "暂无可用实验记录。"
+        return ["- 暂无可用实验记录。"]
     value = record.get(metric_name)
-    return (
-        f"{record.get('experiment_name', '')}，"
-        f"{metric_name}={float(value):.4f}，"
-        f"model={record.get('model_name', '')}，"
-        f"dataset={record.get('dataset_name', '')}"
-    )
+    metric_labels = {
+        "precision": "precision",
+        "recall": "recall",
+        "map50": "mAP50",
+    }
+    metric_label = metric_labels.get(metric_name, metric_name)
+    return [
+        f"- 实验名称：{record.get('experiment_name', '')}",
+        f"- {metric_label}：{float(value):.4f}",
+        f"- 模型：{record.get('model_name', '')}",
+        f"- 数据集：{record.get('dataset_name', '')}",
+    ]
 
 
 def _diagnose_experiments(records: list[dict[str, Any]]) -> list[str]:
@@ -224,11 +230,11 @@ def _diagnose_experiments(records: list[dict[str, Any]]) -> list[str]:
 
     if last_recall > first_recall and last_precision < first_precision:
         conclusions.append(
-            "recall 提升但 precision 下降，模型可能更偏向高召回策略，需要结合误检样本进一步分析。"
+            "recall 提升但 precision 下降，说明模型可能更偏向高召回策略，后续需要结合误检样本进一步分析。"
         )
     if last_precision > first_precision and last_recall < first_recall:
         conclusions.append(
-            "precision 提升但 recall 下降，模型可能较保守，需要关注漏检样本。"
+            "precision 提升但 recall 下降，说明模型可能更保守，后续需要重点关注漏检样本。"
         )
 
     best_map50 = _best_record(records, "map50")
@@ -237,7 +243,7 @@ def _diagnose_experiments(records: list[dict[str, Any]]) -> list[str]:
         map50_95 = float(best_map50.get("map50_95") or 0)
         if map50 - map50_95 >= 0.2:
             conclusions.append(
-                "mAP50 表现高于 mAP50-95 较多，说明定位质量仍有优化空间。"
+                "mAP50 与 mAP50-95 差距较大，说明目标定位质量仍有优化空间。"
             )
 
     if len(records) < 3:
@@ -291,9 +297,9 @@ def generate_experiment_report(
                 "实验名称",
                 "数据集",
                 "模型",
-                "imgsz",
+                "输入尺寸",
                 "batch",
-                "epochs",
+                "训练轮数",
                 "precision",
                 "recall",
                 "mAP50",
@@ -303,17 +309,17 @@ def generate_experiment_report(
             table_rows,
         ),
         "",
-        "## 最佳 recall 实验",
+        "## 最佳召回率实验",
         "",
-        f"- {_experiment_summary_line(best_recall, 'recall')}",
+        *_experiment_summary_lines(best_recall, "recall"),
         "",
-        "## 最佳 precision 实验",
+        "## 最佳精确率实验",
         "",
-        f"- {_experiment_summary_line(best_precision, 'precision')}",
+        *_experiment_summary_lines(best_precision, "precision"),
         "",
         "## 最佳 mAP50 实验",
         "",
-        f"- {_experiment_summary_line(best_map50, 'map50')}",
+        *_experiment_summary_lines(best_map50, "map50"),
         "",
         "## 简单诊断结论",
         "",
