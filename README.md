@@ -8,7 +8,7 @@ A lightweight debugging toolkit for computer vision training workflows.
 
 cv-debug-lab 是一个面向个人算法工程师的本地化 CV 训练诊断工具箱，用于辅助检查 YOLO 数据集质量、记录实验结果、生成训练诊断报告。
 
-当前版本重点解决训练前的数据集体检问题：快速发现图片和标签不匹配、空标签、bbox 越界、bbox 宽高非法、类别分布异常等常见问题，并生成可复盘的 Markdown 报告。
+当前版本重点解决训练前的数据集体检和训练后的实验记录问题：快速发现图片和标签不匹配、空标签、bbox 越界、bbox 宽高非法、类别分布异常等常见问题，同时记录训练指标并生成可复盘的 Markdown 报告。
 
 ## 为什么做这个项目
 
@@ -33,6 +33,11 @@ cv-debug-lab 的目标是把这些容易被忽略的工程问题显式化，让�
 - bbox 宽高非法检查
 - 类别分布统计
 - 每张图片目标框数量统计
+- 实验追踪
+- YOLO results.csv 指标解析
+- SQLite 本地实验记录
+- 实验对比表
+- 中文实验报告导出
 - Markdown 报告生成
 
 ## 技术栈
@@ -68,7 +73,7 @@ cv-debug-lab/
   src/
     __init__.py
     dataset_auditor.py           # YOLO 数据集体检逻辑
-    experiment_tracker.py        # 实验追踪模块占位
+    experiment_tracker.py        # 实验追踪和 SQLite 记录逻辑
     report_generator.py          # Markdown 报告生成逻辑
     utils.py                     # 通用工具函数
   example_data/

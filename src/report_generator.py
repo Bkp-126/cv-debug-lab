@@ -173,3 +173,153 @@ def generate_dataset_audit_report(
 
     output.write_text("\n".join(lines), encoding="utf-8")
     return output
+
+
+def _best_record(
+    records: list[dict[str, Any]],
+    metric_name: str,
+) -> dict[str, Any] | None:
+    """Return the record with the highest value for a metric."""
+    valid_records = [
+        record for record in records if record.get(metric_name) is not None
+    ]
+    if not valid_records:
+        return None
+    return max(valid_records, key=lambda record: float(record.get(metric_name, 0)))
+
+
+def _experiment_summary_line(
+    record: dict[str, Any] | None,
+    metric_name: str,
+) -> str:
+    """Build a Chinese summary line for the best experiment."""
+    if not record:
+        return "暂无可用实验记录。"
+    value = record.get(metric_name)
+    return (
+        f"{record.get('experiment_name', '')}，"
+        f"{metric_name}={float(value):.4f}，"
+        f"model={record.get('model_name', '')}，"
+        f"dataset={record.get('dataset_name', '')}"
+    )
+
+
+def _diagnose_experiments(records: list[dict[str, Any]]) -> list[str]:
+    """Create simple conclusions from experiment records."""
+    conclusions: list[str] = []
+    if len(records) < 2:
+        return ["实验数量较少，建议继续补充实验记录后再做趋势判断。"]
+
+    ordered_records = sorted(
+        records,
+        key=lambda record: str(record.get("created_at", "")),
+    )
+    first = ordered_records[0]
+    last = ordered_records[-1]
+
+    first_recall = float(first.get("recall") or 0)
+    last_recall = float(last.get("recall") or 0)
+    first_precision = float(first.get("precision") or 0)
+    last_precision = float(last.get("precision") or 0)
+
+    if last_recall > first_recall and last_precision < first_precision:
+        conclusions.append(
+            "recall 提升但 precision 下降，模型可能更偏向高召回策略，需要结合误检样本进一步分析。"
+        )
+    if last_precision > first_precision and last_recall < first_recall:
+        conclusions.append(
+            "precision 提升但 recall 下降，模型可能较保守，需要关注漏检样本。"
+        )
+
+    best_map50 = _best_record(records, "map50")
+    if best_map50:
+        map50 = float(best_map50.get("map50") or 0)
+        map50_95 = float(best_map50.get("map50_95") or 0)
+        if map50 - map50_95 >= 0.2:
+            conclusions.append(
+                "mAP50 表现高于 mAP50-95 较多，说明定位质量仍有优化空间。"
+            )
+
+    if len(records) < 3:
+        conclusions.append("实验数量较少，建议继续补充实验记录后再做趋势判断。")
+    if not conclusions:
+        conclusions.append("当前实验记录可以用于基础对比，建议继续结合样本级误差分析。")
+
+    return conclusions
+
+
+def generate_experiment_report(
+    records: list[dict[str, Any]],
+    output_path: str | Path = "reports/experiment_report.md",
+) -> Path:
+    """Write a Chinese Markdown report for experiment tracking records."""
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    table_rows = [
+        [
+            record.get("experiment_name", ""),
+            record.get("dataset_name", ""),
+            record.get("model_name", ""),
+            record.get("imgsz", ""),
+            record.get("batch", ""),
+            record.get("epochs", ""),
+            record.get("precision", ""),
+            record.get("recall", ""),
+            record.get("map50", ""),
+            record.get("map50_95", ""),
+            record.get("created_at", ""),
+        ]
+        for record in records
+    ] or [["-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"]]
+
+    generated_at = datetime.now().isoformat(timespec="seconds")
+    best_recall = _best_record(records, "recall")
+    best_precision = _best_record(records, "precision")
+    best_map50 = _best_record(records, "map50")
+
+    lines = [
+        "# 实验追踪报告",
+        "",
+        f"- 生成时间：`{generated_at}`",
+        f"- 实验总数：`{len(records)}`",
+        "",
+        "## 实验记录表",
+        "",
+        _markdown_table(
+            [
+                "实验名称",
+                "数据集",
+                "模型",
+                "imgsz",
+                "batch",
+                "epochs",
+                "precision",
+                "recall",
+                "mAP50",
+                "mAP50-95",
+                "创建时间",
+            ],
+            table_rows,
+        ),
+        "",
+        "## 最佳 recall 实验",
+        "",
+        f"- {_experiment_summary_line(best_recall, 'recall')}",
+        "",
+        "## 最佳 precision 实验",
+        "",
+        f"- {_experiment_summary_line(best_precision, 'precision')}",
+        "",
+        "## 最佳 mAP50 实验",
+        "",
+        f"- {_experiment_summary_line(best_map50, 'map50')}",
+        "",
+        "## 简单诊断结论",
+        "",
+        *[f"- {item}" for item in _diagnose_experiments(records)],
+        "",
+    ]
+
+    output.write_text("\n".join(lines), encoding="utf-8")
+    return output
