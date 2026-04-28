@@ -38,6 +38,9 @@ cv-debug-lab 的目标是把这些容易被忽略的工程问题显式化，让�
 - SQLite 本地实验记录
 - 实验对比表
 - 中文实验报告导出
+- 总诊断报告生成
+- 数据集体检与实验追踪结果汇总
+- 自动生成下一步建议
 - Markdown 报告生成
 
 ## 技术栈
@@ -106,5 +109,5 @@ cv-debug-lab/
 - 实验结果追踪 Experiment Tracker
 - 误检漏检分析 Error Analyzer
 - 阈值/NMS 扫描
-- 自动生成训练复盘报告
-- GitHub 展示截图补充
+- 可视化截图展示
+- GitHub Release 版本整理

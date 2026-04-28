@@ -14,6 +14,7 @@ from src.experiment_tracker import (
     seed_demo_experiments,
 )
 from src.report_generator import (
+    generate_cv_debug_report,
     generate_dataset_audit_report,
     generate_experiment_report,
 )
@@ -23,6 +24,7 @@ DEFAULT_DATASET_PATH = Path("example_data/yolo_demo")
 DEFAULT_REPORT_PATH = Path("reports/dataset_audit_report.md")
 DEFAULT_DB_PATH = Path("data/experiments.db")
 DEFAULT_EXPERIMENT_REPORT_PATH = Path("reports/experiment_report.md")
+DEFAULT_CV_DEBUG_REPORT_PATH = Path("reports/cv_debug_report.md")
 ISSUE_DESCRIPTIONS = {
     "missing_label": "图片缺少对应标签",
     "orphan_label": "标签缺少对应图片",
@@ -80,6 +82,19 @@ def _show_best_metric(records: list[dict], metric_name: str, label: str) -> None
         f"{title}：`{best['experiment_name']}`，"
         f"{metric_label}={float(best[metric_name]):.4f}"
     )
+
+
+def _best_metric_text(records: list[dict], metric_name: str) -> str:
+    """Return a compact best-metric text for the combined report area."""
+    best = _best_experiment(records, metric_name)
+    if not best:
+        return "暂无实验记录"
+    metric_label = {
+        "precision": "precision",
+        "recall": "recall",
+        "map50": "mAP50",
+    }.get(metric_name, metric_name)
+    return f"{best['experiment_name']}，{metric_label}={float(best[metric_name]):.4f}"
 
 
 def main() -> None:
@@ -163,14 +178,14 @@ def main() -> None:
                 "box_count": "目标框数量",
             }
         )
-        st.dataframe(split_df, use_container_width=True)
+        st.dataframe(split_df, width="stretch")
 
         st.subheader("类别分布")
         class_rows = [
             {"类别 ID": class_id, "目标框数量": count}
             for class_id, count in audit_result["class_distribution"].items()
         ]
-        st.dataframe(pd.DataFrame(class_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(class_rows), width="stretch")
 
         st.subheader("数据集问题清单")
         issue_df = pd.DataFrame(audit_result["issues"])
@@ -189,7 +204,7 @@ def main() -> None:
             issue_df = issue_df[
                 ["数据划分", "问题类型", "问题说明", "文件路径", "行号"]
             ]
-        st.dataframe(issue_df, use_container_width=True)
+        st.dataframe(issue_df, width="stretch")
 
         st.subheader("每张图片目标框数量")
         boxes_df = pd.DataFrame(audit_result["boxes_per_image"]).rename(
@@ -199,7 +214,7 @@ def main() -> None:
                 "box_count": "目标框数量",
             }
         )
-        st.dataframe(boxes_df, use_container_width=True)
+        st.dataframe(boxes_df, width="stretch")
 
         st.success(f"报告已生成：{report_path.as_posix()}")
 
@@ -242,7 +257,7 @@ def main() -> None:
             )
             st.dataframe(
                 parsed_df,
-                use_container_width=True,
+                width="stretch",
             )
         except ValueError as exc:
             st.error(str(exc))
@@ -345,7 +360,7 @@ def main() -> None:
     experiment_df = experiment_df.rename(columns=EXPERIMENT_DISPLAY_COLUMNS)
     st.dataframe(
         experiment_df,
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader("简单实验结论")
@@ -362,6 +377,43 @@ def main() -> None:
             DEFAULT_EXPERIMENT_REPORT_PATH,
         )
         st.success(f"报告已生成：{experiment_report_path.as_posix()}")
+
+    st.divider()
+
+    st.header("总诊断报告")
+    st.write(
+        "汇总数据集体检和实验追踪结果，生成一份适合复盘和展示的 CV 训练诊断报告。"
+    )
+
+    if st.button("生成总诊断报告"):
+        if not DEFAULT_DATASET_PATH.exists():
+            st.error(f"数据集路径不存在：{DEFAULT_DATASET_PATH.as_posix()}")
+        else:
+            cv_audit_result = audit_yolo_dataset(DEFAULT_DATASET_PATH)
+            cv_experiment_records = list_experiments(DEFAULT_DB_PATH)
+            if not cv_experiment_records:
+                st.warning("当前没有实验记录，请先加载示例实验记录或手动新增实验记录。")
+
+            cv_report_path = generate_cv_debug_report(
+                cv_audit_result,
+                cv_experiment_records,
+                DEFAULT_CV_DEBUG_REPORT_PATH,
+            )
+            st.success(f"报告已生成：{cv_report_path.as_posix()}")
+
+            st.subheader("关键诊断摘要")
+            cv_overview = cv_audit_result.get("overview", {})
+            summary_columns = st.columns(4)
+            summary_columns[0].metric("图片总数", cv_overview.get("total_images", 0))
+            summary_columns[1].metric("目标框总数", cv_overview.get("total_boxes", 0))
+            summary_columns[2].metric("问题总数", cv_overview.get("total_issues", 0))
+            summary_columns[3].metric("实验记录数", len(cv_experiment_records))
+
+            st.write(f"最佳召回率实验：{_best_metric_text(cv_experiment_records, 'recall')}")
+            st.write(
+                f"最佳精确率实验：{_best_metric_text(cv_experiment_records, 'precision')}"
+            )
+            st.write(f"最佳 mAP50 实验：{_best_metric_text(cv_experiment_records, 'map50')}")
 
 
 if __name__ == "__main__":

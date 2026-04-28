@@ -181,11 +181,11 @@ def _best_record(
 ) -> dict[str, Any] | None:
     """Return the record with the highest value for a metric."""
     valid_records = [
-        record for record in records if record.get(metric_name) is not None
+        record for record in records if record.get(metric_name) not in (None, "")
     ]
     if not valid_records:
         return None
-    return max(valid_records, key=lambda record: float(record.get(metric_name, 0)))
+    return max(valid_records, key=lambda record: _safe_float(record.get(metric_name)))
 
 
 def _experiment_summary_lines(
@@ -324,6 +324,243 @@ def generate_experiment_report(
         "## 简单诊断结论",
         "",
         *[f"- {item}" for item in _diagnose_experiments(records)],
+        "",
+    ]
+
+    output.write_text("\n".join(lines), encoding="utf-8")
+    return output
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Convert a value to int without raising for missing report fields."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Convert a value to float without raising for missing report fields."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _record_name(record: dict[str, Any] | None) -> str:
+    """Return an experiment display name."""
+    if not record:
+        return "暂无"
+    return str(record.get("experiment_name") or "未命名实验")
+
+
+def _recent_experiment(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the most recent experiment by created_at."""
+    if not records:
+        return None
+    return max(records, key=lambda record: str(record.get("created_at", "")))
+
+
+def _cv_debug_conclusions(
+    dataset_audit_result: dict[str, Any],
+    experiments: list[dict[str, Any]],
+) -> list[str]:
+    """Create cross-module diagnosis conclusions."""
+    conclusions: list[str] = []
+    overview = dataset_audit_result.get("overview", {})
+    issue_counts = dataset_audit_result.get("issue_counts", {})
+    total_labels = max(_safe_int(overview.get("total_label_files")), 1)
+    empty_labels = _safe_int(issue_counts.get("empty_label"))
+
+    missing_or_orphan = _safe_int(issue_counts.get("missing_label")) + _safe_int(
+        issue_counts.get("orphan_label")
+    )
+    invalid_boxes = _safe_int(issue_counts.get("bbox_out_of_bounds")) + _safe_int(
+        issue_counts.get("invalid_bbox_size")
+    )
+
+    if missing_or_orphan > 0:
+        conclusions.append(
+            "数据集结构存在不一致问题，建议在训练前优先修复图片与标签匹配关系。"
+        )
+    if invalid_boxes > 0:
+        conclusions.append(
+            "标注质量存在异常框问题，可能影响模型训练稳定性和评估可信度。"
+        )
+    if empty_labels / total_labels >= 0.2:
+        conclusions.append(
+            "空标签样本比例较高，需要确认这些样本是否确实为负样本，避免误伤召回率。"
+        )
+
+    best_recall = _best_record(experiments, "recall")
+    best_precision = _best_record(experiments, "precision")
+    best_map50 = _best_record(experiments, "map50")
+
+    if len(experiments) < 2:
+        conclusions.append(
+            "当前实验记录较少，暂不适合做趋势判断，建议继续补充实验记录。"
+        )
+    if (
+        best_recall
+        and best_precision
+        and best_recall.get("experiment_name") != best_precision.get("experiment_name")
+    ):
+        conclusions.append(
+            "当前实验中 recall 和 precision 最优结果来自不同实验，说明模型在召回和误检之间存在权衡，需要结合错例分析进一步判断。"
+        )
+    if best_recall and _safe_float(best_recall.get("recall")) < 0.7:
+        conclusions.append(
+            "当前模型召回率仍有提升空间，建议优先分析漏检样本和小目标样本。"
+        )
+    if best_precision and _safe_float(best_precision.get("precision")) < 0.7:
+        conclusions.append(
+            "当前模型误检压力较大，建议结合 FP 样本、阈值和 NMS 策略继续分析。"
+        )
+    if best_map50 and _safe_float(best_map50.get("map50")) < 0.7:
+        conclusions.append(
+            "当前 mAP50 仍有提升空间，建议结合数据质量和训练配置继续迭代。"
+        )
+
+    if not conclusions:
+        conclusions.append(
+            "当前数据集和实验记录已具备基础复盘价值，可以继续补充错例分析和可视化结果。"
+        )
+    return conclusions
+
+
+def _cv_debug_next_steps(
+    dataset_audit_result: dict[str, Any],
+    experiments: list[dict[str, Any]],
+) -> list[str]:
+    """Create next-step suggestions from cross-module diagnosis inputs."""
+    issue_counts = dataset_audit_result.get("issue_counts", {})
+    suggestions: list[str] = []
+
+    if _safe_int(issue_counts.get("missing_label")) + _safe_int(
+        issue_counts.get("orphan_label")
+    ) > 0:
+        suggestions.append("修复数据集结构问题，确保图片和标签一一对应。")
+    if _safe_int(issue_counts.get("bbox_out_of_bounds")) + _safe_int(
+        issue_counts.get("invalid_bbox_size")
+    ) > 0:
+        suggestions.append("检查异常 bbox 标注，优先处理越界框和宽高非法框。")
+    if _safe_int(issue_counts.get("empty_label")) > 0:
+        suggestions.append("确认空标签是否为真实负样本。")
+    if len(experiments) < 2:
+        suggestions.append("增加实验记录，至少保留两组以上可对比实验。")
+
+    suggestions.extend(
+        [
+            "做误检漏检分析，拆分 FP/FN 样本原因。",
+            "做阈值/NMS 扫描，观察 precision 与 recall 的权衡。",
+            "补充 hard case 样本，提升模型对困难场景的鲁棒性。",
+            "生成 GitHub 展示截图，补充项目使用效果说明。",
+        ]
+    )
+
+    deduped: list[str] = []
+    for item in suggestions:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
+def generate_cv_debug_report(
+    dataset_audit_result: dict[str, Any],
+    experiments: list[dict[str, Any]],
+    output_path: str | Path = "reports/cv_debug_report.md",
+) -> Path:
+    """Generate a combined Chinese CV training diagnosis report."""
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    generated_at = datetime.now().isoformat(timespec="seconds")
+    overview = dataset_audit_result.get("overview", {})
+    splits = dataset_audit_result.get("splits", {})
+    issue_counts = dataset_audit_result.get("issue_counts", {})
+    class_distribution = dataset_audit_result.get("class_distribution", {})
+    train_stats = splits.get("train", {})
+    val_stats = splits.get("val", {})
+
+    best_recall = _best_record(experiments, "recall")
+    best_precision = _best_record(experiments, "precision")
+    best_map50 = _best_record(experiments, "map50")
+    recent = _recent_experiment(experiments)
+    empty_labels = _safe_int(train_stats.get("empty_label_count")) + _safe_int(
+        val_stats.get("empty_label_count")
+    )
+    missing_labels = _safe_int(train_stats.get("missing_label_count")) + _safe_int(
+        val_stats.get("missing_label_count")
+    )
+    orphan_labels = _safe_int(train_stats.get("orphan_label_count")) + _safe_int(
+        val_stats.get("orphan_label_count")
+    )
+
+    class_rows = [
+        [class_id, count] for class_id, count in class_distribution.items()
+    ] or [["-", 0]]
+
+    experiment_rows = [
+        ["最佳 recall 实验", _record_name(best_recall), f"{_safe_float(best_recall.get('recall') if best_recall else None):.4f}" if best_recall else "-"],
+        ["最佳 precision 实验", _record_name(best_precision), f"{_safe_float(best_precision.get('precision') if best_precision else None):.4f}" if best_precision else "-"],
+        ["最佳 mAP50 实验", _record_name(best_map50), f"{_safe_float(best_map50.get('map50') if best_map50 else None):.4f}" if best_map50 else "-"],
+        ["最近一次实验", _record_name(recent), str(recent.get("created_at", "")) if recent else "-"],
+    ]
+
+    lines = [
+        "# CV 训练诊断报告",
+        "",
+        "## 报告概览",
+        "",
+        _markdown_table(
+            ["项目", "数值"],
+            [
+                ["生成时间", generated_at],
+                ["数据集路径", dataset_audit_result.get("dataset_path", "")],
+                ["实验记录数量", len(experiments)],
+                ["总图片数", overview.get("total_images", 0)],
+                ["总目标框数", overview.get("total_boxes", 0)],
+                ["总问题数量", overview.get("total_issues", 0)],
+            ],
+        ),
+        "",
+        "## 数据集体检摘要",
+        "",
+        _markdown_table(
+            ["指标", "数值"],
+            [
+                ["train 图片数", train_stats.get("image_count", 0)],
+                ["val 图片数", val_stats.get("image_count", 0)],
+                ["标签文件数", overview.get("total_label_files", 0)],
+                ["空标签文件数", empty_labels],
+                ["bbox 越界数量", issue_counts.get("bbox_out_of_bounds", 0)],
+                ["bbox 宽高非法数量", issue_counts.get("invalid_bbox_size", 0)],
+                ["图片缺标签数量", missing_labels],
+                ["标签缺图片数量", orphan_labels],
+            ],
+        ),
+        "",
+        "### 类别分布摘要",
+        "",
+        _markdown_table(["类别 ID", "目标框数量"], class_rows),
+        "",
+        "## 实验追踪摘要",
+        "",
+        _markdown_table(["摘要项", "实验名称", "指标/时间"], experiment_rows),
+        "",
+        "## 自动诊断结论",
+        "",
+        *[
+            f"- {conclusion}"
+            for conclusion in _cv_debug_conclusions(dataset_audit_result, experiments)
+        ],
+        "",
+        "## 下一步建议",
+        "",
+        *[
+            f"- {suggestion}"
+            for suggestion in _cv_debug_next_steps(dataset_audit_result, experiments)
+        ],
         "",
     ]
 
