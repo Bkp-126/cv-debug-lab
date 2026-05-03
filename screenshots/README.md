@@ -4,9 +4,9 @@
 
 建议准备以下截图：
 
-- `home.png`：项目首页
-- `dataset_auditor.png`：数据集体检区域
-- `experiment_tracker.png`：实验追踪区域
-- `summary_report.png`：总诊断报告区域或报告预览
+- `home.png`：首页截图
+- `dataset_auditor.png`：数据集体检截图
+- `experiment_tracker.png`：实验追踪截图
+- `summary_report.png`：总诊断报告截图
 
 截图建议使用项目内置示例数据生成，保持页面内容简洁统一。

@@ -31,7 +31,7 @@
 ## 功能一览
 
 | 模块 | 能力 | 输出 |
-| --- | --- | --- |
+|---|---|---|
 | Dataset Auditor | 检查 YOLO 数据集结构、标签质量、类别分布和每图目标数 | `reports/dataset_audit_report.md` |
 | Experiment Tracker | 解析 `results.csv`，记录实验参数和指标，对比最佳实验 | `reports/experiment_report.md` |
 | Report Generator | 汇总数据集体检和实验追踪结果，给出诊断结论和下一步建议 | `reports/cv_debug_report.md` |
@@ -43,6 +43,24 @@
 - **实验记录本地化**：使用 SQLite 保存实验记录，不依赖外部服务，适合个人项目快速复盘。
 - **中文 Markdown 报告**：一键生成数据集报告、实验报告和总诊断报告，方便直接放入项目文档。
 - **开箱即用示例数据**：项目内置模拟 YOLO 数据集和模拟 `results.csv`，克隆后即可体验完整流程。
+
+## 项目截图
+
+### 首页
+
+![首页](screenshots/home.png)
+
+### 数据集体检
+
+![数据集体检](screenshots/dataset_auditor.png)
+
+### 实验追踪
+
+![实验追踪](screenshots/experiment_tracker.png)
+
+### 总诊断报告
+
+![总诊断报告](screenshots/summary_report.png)
 
 ## 快速开始
 
@@ -115,12 +133,16 @@ example_data/yolo_results/results.csv
 
 可用于演示 precision、recall、mAP50、mAP50-95 的自动解析。
 
+## 数据说明
+
+本仓库中的图片、标签、训练指标和报告内容均为演示用途的模拟样例，仅用于说明工具功能和页面交互。项目不依赖外部业务系统或私有数据源，运行时产生的本地数据库文件会保存在 `data/` 目录，并由 `.gitignore` 排除。
+
 ## 报告样例
 
 项目当前会生成三类 Markdown 报告：
 
 | 报告 | 说明 |
-| --- | --- |
+|---|---|
 | `reports/dataset_audit_report.md` | 数据集体检报告，聚焦数据结构和标注质量 |
 | `reports/experiment_report.md` | 实验追踪报告，聚焦训练参数和指标对比 |
 | `reports/cv_debug_report.md` | 总诊断报告，汇总数据问题、实验表现和下一步建议 |
@@ -156,7 +178,7 @@ cv-debug-lab/
 ## 技术栈
 
 | 类型 | 技术 |
-| --- | --- |
+|---|---|
 | Web UI | Streamlit |
 | 数据处理 | Pandas |
 | 示例图片生成 | Pillow |
