@@ -4,52 +4,63 @@
 
 A lightweight debugging toolkit for computer vision training workflows.
 
-## 项目简介
+## 简介
 
-cv-debug-lab 是一个面向个人算法工程师的本地化 CV 训练诊断工具箱，用于辅助检查 YOLO 数据集质量、记录实验结果、生成训练诊断报告。
+cv-debug-lab 是一个用 Python 和 Streamlit 构建的 CV 训练诊断小工具，适合在 YOLO/CV 项目中做训练前检查、训练后记录和结果复盘。
 
-当前版本重点解决训练前的数据集体检和训练后的实验记录问题：快速发现图片和标签不匹配、空标签、bbox 越界、bbox 宽高非法、类别分布异常等常见问题，同时记录训练指标并生成可复盘的 Markdown 报告。
+它把常见的工程排查动作整理成三个模块：数据集体检、实验追踪、总诊断报告。项目使用模拟 YOLO 数据集作为演示样例，可以直接本地运行，也可以作为个人算法工程作品展示。
 
-## 为什么做这个项目
+## 为什么做
 
-在真实 CV 项目中，模型效果不好往往不只是模型结构或训练参数的问题，也可能来自数据和实验管理环节：
+CV 训练效果不理想时，问题不一定只在模型本身。很多时候，数据结构、标签质量、训练划分和实验记录都会影响最终结果。
 
-- 数据集结构问题
-- 标注质量问题
-- train/val 划分问题
-- 空标签和异常框问题
-- 实验结果无法复盘
+cv-debug-lab 关注这些训练流程中的基础环节：
 
-cv-debug-lab 的目标是把这些容易被忽略的工程问题显式化，让训练前检查、训练后复盘和报告输出变得更轻量、更稳定。
+- 图片和标签是否一一对应
+- 标签文件是否为空
+- bbox 是否越界或宽高非法
+- train/val 数据划分是否清晰
+- 类别分布是否明显异常
+- 每次训练的 precision、recall、mAP 是否可追踪
+- 训练结果是否能沉淀成可复盘报告
 
-## 当前功能
+## 功能概览
 
-目前 V0.1 支持：
+### Dataset Auditor 数据集体检
 
-- YOLO 数据集体检
-- 图片和标签匹配检查
-- 空标签检查
-- bbox 越界检查
-- bbox 宽高非法检查
-- 类别分布统计
-- 每张图片目标框数量统计
-- 实验追踪
-- YOLO results.csv 指标解析
-- SQLite 本地实验记录
-- 实验对比表
-- 中文实验报告导出
-- 总诊断报告生成
-- 数据集体检与实验追踪结果汇总
-- 自动生成下一步建议
-- Markdown 报告生成
+- 扫描 YOLO 数据集目录
+- 检查图片/标签匹配关系
+- 统计空标签文件
+- 检查 bbox 越界
+- 检查 bbox 宽高非法
+- 统计类别分布
+- 统计每张图片目标框数量
+- 生成中文数据集体检报告
 
-## 技术栈
+### Experiment Tracker 实验追踪
 
-- Python
-- Streamlit
-- Pandas
-- Pillow
-- SQLite，后续实验记录模块使用
+- 手动新增实验记录
+- 解析 YOLO `results.csv`
+- 使用 SQLite 在本地保存实验记录
+- 展示实验记录对比表
+- 统计最佳 recall / precision / mAP50 实验
+- 生成中文实验追踪报告
+
+### Report Generator 总诊断报告
+
+- 汇总数据集体检结果
+- 汇总实验追踪结果
+- 自动生成 CV 训练诊断报告
+- 输出诊断结论和下一步建议
+
+## 界面预览
+
+截图建议放在 `screenshots/` 目录。当前版本预留以下截图位：
+
+- 首页：`screenshots/home.png`
+- 数据集体检：`screenshots/dataset_auditor.png`
+- 实验追踪：`screenshots/experiment_tracker.png`
+- 总诊断报告：`screenshots/summary_report.png`
 
 ## 快速开始
 
@@ -62,52 +73,79 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-启动后，在页面中点击 `运行数据集体检`，即可扫描默认示例数据集并生成 Markdown 报告。
+启动后可以依次体验：
+
+- `运行数据集体检`
+- `加载示例实验记录`
+- `生成实验追踪报告`
+- `生成总诊断报告`
+
+## 示例数据
+
+项目内置一份小型模拟 YOLO 数据集：
+
+```text
+example_data/yolo_demo/
+  images/
+    train/
+    val/
+  labels/
+    train/
+    val/
+```
+
+这份数据集用于演示数据集体检能力，覆盖了正常标签、空标签、bbox 越界、bbox 宽高非法、图片缺少标签、标签缺少图片等情况。
+
+同时提供一份模拟训练结果：
+
+```text
+example_data/yolo_results/results.csv
+```
+
+用于演示 YOLO 指标解析，包括 precision、recall、mAP50 和 mAP50-95。
+
+## 示例报告
+
+运行页面功能后，会生成以下 Markdown 报告：
+
+- `reports/dataset_audit_report.md`
+- `reports/experiment_report.md`
+- `reports/cv_debug_report.md`
+
+其中 `reports/cv_debug_report.md` 是汇总报告，适合作为一次完整训练诊断的输出样例。
 
 ## 项目结构
 
 ```text
 cv-debug-lab/
   app.py                         # Streamlit 应用入口
-  README.md                      # 项目说明文档
-  requirements.txt               # Python 依赖列表
-  .gitignore                     # 本地文件和模型产物排除规则
-  LICENSE                        # 开源许可证
   src/
-    __init__.py
     dataset_auditor.py           # YOLO 数据集体检逻辑
     experiment_tracker.py        # 实验追踪和 SQLite 记录逻辑
     report_generator.py          # Markdown 报告生成逻辑
     utils.py                     # 通用工具函数
   example_data/
     yolo_demo/                   # 模拟 YOLO 数据集
-      images/
-        train/
-        val/
-      labels/
-        train/
-        val/
-    yolo_results/
-      results.csv                # 模拟 YOLO 训练结果
-  reports/                       # 生成的 Markdown 报告
-  data/                          # 后续 SQLite 数据文件目录
-  screenshots/                   # 后续 GitHub 展示截图目录
+    yolo_results/results.csv     # 模拟 YOLO 训练结果
+  reports/                       # 示例 Markdown 报告
+  screenshots/                   # 项目截图目录
+  docs/                          # 项目说明文档
+  data/                          # 本地运行数据目录
 ```
 
-## 示例数据说明
+## 技术栈
 
-`example_data/yolo_demo` 是一份模拟 YOLO 数据集，仅用于开源演示。图片由简单几何图形生成，标签文件刻意覆盖正常标签、空标签、bbox 越界、bbox 宽高非法、图片缺少标签、标签缺少图片等情况。
-
-该示例数据不包含任何公司或真实业务数据。
-
-## 脱敏说明
-
-本项目是通用 CV 工具项目，不包含公司项目代码、真实业务数据、模型权重、现场日志或内部接口文档。
+- Python
+- Streamlit
+- Pandas
+- Pillow
+- SQLite
 
 ## Roadmap
 
-- 实验结果追踪 Experiment Tracker
 - 误检漏检分析 Error Analyzer
 - 阈值/NMS 扫描
-- 可视化截图展示
+- hard case 样本管理
+- 更多可视化图表
+- README 英文版 `README_EN.md`
 - GitHub Release 版本整理
